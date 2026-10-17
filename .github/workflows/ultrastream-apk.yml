@@ -2,7 +2,7 @@ name: Build and Release UltraStream APK
 on:
   workflow_dispatch:
   push:
-    branches: [feature/ultrastream-android]
+    branches: [feature/ultrastream-android, feature/ultrastream-miracast-discovery]
     paths:
       - 'ultrastream/**'
       - '.github/workflows/ultrastream-apk.yml'
@@ -48,6 +48,7 @@ jobs:
 
   release:
     name: Publish tested build artifacts
+    if: github.ref == 'refs/heads/feature/ultrastream-android'
     needs: build
     runs-on: ubuntu-24.04
     steps:
