@@ -29,19 +29,17 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(35,45,35,35) }
         root.addView(TextView(this).apply { text = "UltraStream  📺"; textSize = 29f })
         root.addView(TextView(this).apply {
-            text = "Para Smart TVs Samsung, LG, Philco ou outras que aceitem espelhamento nativo:"
+            text = "Protótipo Miracast: detectar TVs Wi-Fi Direct (ainda sem transmissão)."
             textSize = 17f
         })
         root.addView(Button(this).apply {
-            text = "📺 Espelhar na TV (sem instalar app)"
-            setOnClickListener { openSystemCasting() }
+            text = "🔎 Testar descoberta Miracast"
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, MiracastDiscoveryActivity::class.java))
+            }
         })
         root.addView(TextView(this).apply {
-            text = "O Android mostrará as TVs compatíveis. Dependendo do modelo, confirme na televisão. Nem toda TV ou celular oferece essa função."
-            textSize = 14f
-        })
-        root.addView(TextView(this).apply {
-            text = "Ou conecte a uma Android TV / Google TV com UltraStream TV instalado:"
+            text = "Modo anterior: escolha uma Android TV com o receptor UltraStream instalado."
             textSize = 17f
         })
         status = TextView(this).apply { text = "Procurando TVs…"; textSize = 16f }
@@ -56,23 +54,6 @@ class MainActivity : Activity() {
         )
         nsd = getSystemService(Context.NSD_SERVICE) as NsdManager
         scan()
-    }
-
-    private fun openSystemCasting() {
-        try {
-            startActivity(Intent(Settings.ACTION_CAST_SETTINGS))
-        } catch (_: ActivityNotFoundException) {
-            AlertDialog.Builder(this)
-                .setTitle("Espelhamento nativo")
-                .setMessage(
-                    "Abra os ajustes rápidos do celular e procure por Transmitir, Smart View ou Espelhar tela. " +
-                    "A TV precisa oferecer espelhamento compatível. Em aparelhos sem essa função, esta opção não funciona."
-                )
-                .setPositiveButton("Entendi", null)
-                .show()
-        } catch (_: SecurityException) {
-            status.text = "O sistema do celular não permite abrir o espelhamento."
-        }
     }
 
     private fun scan() {
