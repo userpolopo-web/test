@@ -1,6 +1,7 @@
 package com.ultrastream
 
 import android.app.*
+import android.media.projection.MediaProjection
 import android.content.Intent
 import android.os.IBinder
 import android.content.pm.ServiceInfo
@@ -116,7 +117,7 @@ class StreamService : Service() {
                     .put("candidate", candidate.sdp))
             }
         })
-        peer?.addTrack(videoTrack, listOf("ultrastream"))
+        videoTrack?.let { track -> peer?.addTrack(track, listOf("ultrastream")) }
         peer?.createOffer(object : SdpObserverAdapter() {
             override fun onCreateSuccess(desc: SessionDescription) {
                 peer?.setLocalDescription(object : SdpObserverAdapter() {
