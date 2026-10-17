@@ -1,0 +1,71 @@
+name: Build and Release UltraStream APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/ultrastream-android, feature/ultrastream-miracast-discovery]
+    paths:
+      - 'ultrastream/**'
+      - '.github/workflows/ultrastream-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.module }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: app
+            filename: UltraStream-Android-0.2.apk
+          - module: tv
+            filename: UltraStream-TV-0.2.apk
+    defaults:
+      run:
+        working-directory: ultrastream
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Compile ${{ matrix.module }} APK
+        run: gradle :${{ matrix.module }}:assembleDebug --stacktrace --console=plain
+      - name: Check output APK
+        run: |
+          test -s "${{ matrix.module }}/build/outputs/apk/debug/${{ matrix.module }}-debug.apk"
+          cp "${{ matrix.module }}/build/outputs/apk/debug/${{ matrix.module }}-debug.apk" "${{ matrix.filename }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ultrastream-${{ matrix.module }}-apk
+          path: ultrastream/${{ matrix.filename }}
+          if-no-files-found: error
+
+  release:
+    name: Publish tested build artifacts
+    if: github.ref == 'refs/heads/feature/ultrastream-android'
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ultrastream-*-apk
+          path: apk
+          merge-multiple: true
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -s apk/UltraStream-Android-0.2.apk
+          test -s apk/UltraStream-TV-0.2.apk
+          TAG="ultrastream-v0.2.0-build-${{ github.run_number }}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$TAG" apk/UltraStream-Android-0.2.apk apk/UltraStream-TV-0.2.apk --repo "${{ github.repository }}" --clobber
+          else
+            gh release create "$TAG" apk/UltraStream-Android-0.2.apk apk/UltraStream-TV-0.2.apk --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "UltraStream 0.2.0 (teste) - build ${{ github.run_number }}" --notes "APK Android + APK Android TV. Pareamento com aprovação na TV. Sem áudio. Requer testes em dispositivos reais." --prerelease --latest=false
+          fi
