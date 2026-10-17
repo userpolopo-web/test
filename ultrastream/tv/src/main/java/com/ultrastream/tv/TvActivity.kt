@@ -29,14 +29,15 @@ class TvActivity : Activity() {
     private val pending = mutableListOf<IceCandidate>()
     private val pin = (SecureRandom().nextInt(900000) + 100000).toString()
     private var registered: NsdServiceInfo? = null
-    private var attempts = mutableMapOf<WebSocket,Int>()
+    private val attempts = java.util.concurrent.ConcurrentHashMap<WebSocket, Int>()
+    private val pendingPairings = java.util.concurrent.ConcurrentHashMap.newKeySet<WebSocket>()
     private val port = 39876
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xff090c12.toInt()); gravity = Gravity.CENTER; setPadding(24,24,24,24) }
         val title = TextView(this).apply { text = "UltraStream TV"; textSize = 32f; setTextColor(-1); gravity = Gravity.CENTER }
-        codeLabel = TextView(this).apply { text = "Código de conexão: $pin"; textSize = 28f; setTextColor(-1); gravity = Gravity.CENTER }
+        codeLabel = TextView(this).apply { text = "Aguardando conexão segura"; textSize = 28f; setTextColor(-1); gravity = Gravity.CENTER }
         status = TextView(this).apply { text = "Abra UltraStream no celular conectado ao mesmo Wi-Fi."; textSize = 18f; setTextColor(-1); gravity = Gravity.CENTER }
         renderer = SurfaceViewRenderer(this)
         root.addView(title); root.addView(codeLabel); root.addView(status)
