@@ -1,6 +1,7 @@
 package com.ultrastream.tv
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Bundle
@@ -60,6 +61,7 @@ class TvActivity : Activity() {
             override fun onOpen(conn: WebSocket, handshake: ClientHandshake) {}
             override fun onClose(conn: WebSocket, code: Int, reason: String, remote: Boolean) {
                 attempts.remove(conn)
+                synchronized(pendingPairings) { pendingPairings.remove(conn) }
                 if (sender === conn) {
                     sender = null
                     runOnUiThread { peer?.close(); peer?.dispose(); peer = null; status?.text = "Aguardando conexão do celular…"; codeLabel?.visibility = android.view.View.VISIBLE }
@@ -72,6 +74,29 @@ class TvActivity : Activity() {
                 try {
                     val msg = JSONObject(message)
                     when(msg.optString("type")) {
+                        "pair-request" -> {
+                            val fresh = synchronized(pendingPairings) { pendingPairings.add(conn) }
+                            if (fresh) {
+                                val deviceName = msg.optString("device").take(48).ifBlank { "Celular Android" }
+                                runOnUiThread {
+                                    if (!isFinishing && !isDestroyed) {
+                                        AlertDialog.Builder(this@TvActivity)
+                                            .setTitle("Autorizar transmissão?")
+                                            .setMessage("$deviceName quer transmitir a tela para esta TV.")
+                                            .setNegativeButton("Recusar") { _, _ ->
+                                                synchronized(pendingPairings) { pendingPairings.remove(conn) }
+                                                send(conn, JSONObject().put("type", "pair-denied"))
+                                            }
+                                            .setPositiveButton("Permitir") { _, _ ->
+                                                synchronized(pendingPairings) { pendingPairings.remove(conn) }
+                                                if (conn.isOpen) {
+                                                    send(conn, JSONObject().put("type", "pair-approved").put("pin", pin))
+                                                }
+                                            }.show()
+                                    }
+                                }
+                            }
+                        }
                         "check", "auth" -> {
                             val count = attempts[conn] ?: 0
                             if (count >= 5) { conn.close(1008,"Too many tries"); return }
