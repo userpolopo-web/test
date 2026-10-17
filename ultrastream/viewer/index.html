@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UltraStream • Assistir</title>
+<style>
+body{margin:0;background:#090c12;color:#f5f8ff;font-family:system-ui,sans-serif}
+main{max-width:1100px;margin:40px auto;padding:24px}
+h1{letter-spacing:-1px}input,button{border:1px solid #3f4b66;border-radius:10px;padding:12px;background:#182233;color:white;margin:4px}
+button{background:#2866eb;cursor:pointer}
+video{width:100%;aspect-ratio:16/9;object-fit:contain;background:black;border-radius:16px;margin-top:18px}
+#status{color:#a9bddb}
+</style></head><body><main>
+<h1>◉ UltraStream</h1><p>Assista à tela transmitida com WebRTC e baixa latência.</p>
+<input id="server" size="30" placeholder="wss://seu-servidor"><input id="room" value="minha-sala" placeholder="Sala">
+<button id="connect">Conectar</button><p id="status">Aguardando conexão</p>
+<video id="video" autoplay playsinline controls></video>
+</main><script>
+let ws,pc,pending=[];
+const $=id=>document.getElementById(id);
+$('server').value = location.protocol === 'https:' ? 'wss://' + location.host : 'ws://' + location.hostname + ':8080';
+$('connect').onclick=()=>{
+  if(ws) ws.close(); if(pc) pc.close(); pending=[];
+  const room=$('room').value.trim();
+  const send=obj=>ws?.readyState===1&&ws.send(JSON.stringify({...obj,room}));
+  pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  pc.ontrack=e=>{ $('video').srcObject=e.streams[0] || new MediaStream([e.track]); $('status').textContent='Vídeo recebido'; };
+  pc.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.candidate,mid:e.candidate.sdpMid,mline:e.candidate.sdpMLineIndex});};
+  pc.onconnectionstatechange=()=>{ $('status').textContent='Conexão: '+pc.connectionState; };
+  ws=new WebSocket($('server').value.trim());
+  ws.onopen=()=>{send({type:'join',role:'viewer'});$('status').textContent='Aguardando transmissor...';};
+  ws.onerror=()=>{$('status').textContent='Erro no WebSocket';};
+  ws.onmessage=async e=>{
+    try {
+      const m=JSON.parse(e.data);
+      if(m.type==='offer') {
+        await pc.setRemoteDescription({type:'offer',sdp:m.sdp});
+        for(const c of pending) await pc.addIceCandidate(c);pending=[];
+        const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
+        send({type:'answer',sdp:answer.sdp});
+      } else if(m.type==='candidate') {
+        const c={candidate:m.candidate,sdpMid:m.mid,sdpMLineIndex:m.mline};
+        if(pc.remoteDescription)await pc.addIceCandidate(c);else pending.push(c);
+      } else if(m.type==='sender-left'){$('status').textContent='Transmissor desconectado';$('video').srcObject=null;}
+    }catch(err){$('status').textContent='Erro: '+err.message;}
+  };
+};
+</script></body></html>
