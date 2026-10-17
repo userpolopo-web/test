@@ -28,6 +28,7 @@ class StreamService : Service() {
     private var egl: EglBase? = null
     private val client = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
     private var room = ""
+    private var pin = ""
     private var closed = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -46,6 +47,7 @@ class StreamService : Service() {
         else @Suppress("DEPRECATION") intent.getParcelableExtra<Intent>("projectionData")
         if (projectionIntent == null) { stopSelf(); return START_NOT_STICKY }
         room = intent.getStringExtra("room") ?: ""
+        pin = intent.getStringExtra("pin") ?: ""
         try {
             PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(this).createInitializationOptions())
             egl = EglBase.create()
@@ -78,13 +80,15 @@ class StreamService : Service() {
     private fun connect(url: String) {
         ws = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                send(JSONObject().put("type", "join").put("room", room).put("role", "sender"))
+                send(JSONObject().put("type", "auth").put("pin", pin))
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
                     when (msg.optString("type")) {
+                        "pin-valid" -> send(JSONObject().put("type", "ready"))
                         "viewer-ready" -> mainHandler.post { startPeer() }
+                        "pin-invalid" -> mainHandler.post { stopSelf() }
                         "answer" -> {
                             val answer = SessionDescription(SessionDescription.Type.ANSWER, msg.getString("sdp"))
                             peer?.setRemoteDescription(object : SdpObserverAdapter() {}, answer)
