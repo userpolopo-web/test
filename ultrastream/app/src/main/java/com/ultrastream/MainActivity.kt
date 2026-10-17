@@ -74,39 +74,45 @@ class MainActivity : Activity() {
         list.removeAllViews()
         status.text = if(devices.isEmpty()) "Nenhuma TV encontrada. Abra UltraStream na Android TV." else "${devices.size} TV(s) encontrada(s)"
         for ((name, endpoint) in devices) {
-            list.addView(Button(this).apply { text = "📺 $name    •    Transmitir"; setOnClickListener { askPin(endpoint.first,endpoint.second) } })
+            list.addView(Button(this).apply { text = "📺 $name    •    Transmitir"; setOnClickListener { requestPairing(endpoint.first,endpoint.second) } })
         }
     }
 
-    private fun askPin(ip: String, port: Int) {
-        val input = EditText(this).apply { hint = "Código de 6 dígitos"; inputType = 2 }
-        AlertDialog.Builder(this).setTitle("Código exibido na TV").setMessage("Digite o código que aparece na tela da TV.")
-            .setView(input).setNegativeButton("Cancelar", null)
-            .setPositiveButton("Conectar") { _, _ ->
-                val code = input.text.toString().trim()
-                if (!code.matches(Regex("[0-9]{6}"))) { status.text = "O código deve ter 6 números."; return@setPositiveButton }
-                validatePin("ws://$ip:$port", code)
-            }.show()
-    }
-
-    private fun validatePin(url: String, code: String) {
-        status.text = "Conectando à TV…"
+    private fun requestPairing(ip: String, port: Int) {
+        val url = "ws://$ip:$port"
+        status.text = "Aguardando autorização na TV…"
         val socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
-                ws.send(JSONObject().put("type","check").put("pin",code).toString())
+                ws.send(JSONObject().put("type", "pair-request").put("device", android.os.Build.MODEL.take(48)).toString())
             }
             override fun onMessage(ws: WebSocket, text: String) {
-                val valid = try { JSONObject(text).optString("type") == "pin-valid" } catch (_: Exception) { false }
-                ws.close(1000,"checked")
-                runOnUiThread {
-                    if (valid) {
-                        address=url; pin=code
-                        status.text = "TV conectada! Autorize compartilhar sua tela."
-                        startActivityForResult((getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).createScreenCaptureIntent(),77)
-                    } else status.text = "Código incorreto ou expirado."
+                val msg = try { JSONObject(text) } catch (_: Exception) { return }
+                when (msg.optString("type")) {
+                    "pair-approved" -> {
+                        val issuedPin = msg.optString("pin")
+                        ws.close(1000, "paired")
+                        if (!issuedPin.matches(Regex("[0-9]{6}"))) {
+                            runOnUiThread { status.text = "Resposta de conexão inválida." }
+                            return
+                        }
+                        runOnUiThread {
+                            address = url
+                            pin = issuedPin
+                            status.text = "TV autorizada! Confirme o compartilhamento da tela."
+                            startActivityForResult(
+                                (getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).createScreenCaptureIntent(), 77
+                            )
+                        }
+                    }
+                    "pair-denied" -> {
+                        ws.close(1000, "denied")
+                        runOnUiThread { status.text = "A conexão foi recusada na TV." }
+                    }
                 }
             }
-            override fun onFailure(ws: WebSocket, e: Throwable, response: Response?) { runOnUiThread { status.text = "Não foi possível conectar à TV." } }
+            override fun onFailure(ws: WebSocket, e: Throwable, response: Response?) {
+                runOnUiThread { status.text = "Não foi possível conectar à TV." }
+            }
         })
     }
 
