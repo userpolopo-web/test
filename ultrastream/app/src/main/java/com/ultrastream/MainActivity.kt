@@ -79,7 +79,8 @@ class MainActivity : Activity() {
     }
 
     private fun requestPairing(ip: String, port: Int) {
-        val url = "ws://$ip:$port"
+        val host = if (ip.contains(":") && !ip.startsWith("[")) "[$ip]" else ip
+        val url = "ws://$host:$port"
         status.text = "Aguardando autorização na TV…"
         val socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
@@ -124,7 +125,7 @@ class MainActivity : Activity() {
                 putExtra("resultCode",resultCode); putExtra("projectionData",data)
                 putExtra("url",address); putExtra("pin",pin); putExtra("room","tv")
             })
-            status.text = "Transmitindo para sua TV."
+            status.text = "Iniciando transmissão para a TV…"
         } else if(requestCode==77) status.text="Compartilhamento cancelado."
     }
 
