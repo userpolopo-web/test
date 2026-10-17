@@ -1,12 +1,13 @@
-name: Build UltraStream APK
+name: Build and Release UltraStream APK
 on:
   workflow_dispatch:
   push:
-    branches:
-      - feature/ultrastream-android
+    branches: [feature/ultrastream-android]
     paths:
       - 'ultrastream/**'
       - '.github/workflows/ultrastream-apk.yml'
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,12 +20,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - run: gradle :app:assembleDebug --stacktrace
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Prepare download filename
+        run: cp app/build/outputs/apk/debug/app-debug.apk UltraStream-v0.1.0-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: UltraStream-debug-apk
-          path: ultrastream/app/build/outputs/apk/debug/app-debug.apk
+          path: ultrastream/UltraStream-v0.1.0-debug.apk
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "ultrastream-v0.1.0-build-${{ github.run_number }}" ./UltraStream-v0.1.0-debug.apk \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "UltraStream 0.1.0 (teste) - build ${{ github.run_number }}" \
+            --notes "APK de testes do UltraStream. Transmissão de tela WebRTC. Requer servidor de sinalização; ainda sem áudio ou TURN. Não é uma versão estável." \
+            --prerelease \
+            --latest=false
